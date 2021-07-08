@@ -52,15 +52,15 @@ def compute_ytc_strategy_return(pps_df, yearn_exposure_multiplier, maturity_in_d
 
     pps_df['Share of Pool in YTC'] = (yearn_exposure_multiplier - pps_df['Price of 1 pDAI']*yearn_exposure_multiplier - 1 + pps_df['Price of 1 pDAI']) / pps_df['Price of 1 pDAI']
 
-    pps_df['YT Balance'] = pps_df['Share of Pool in YTC'] / (1-pps_df['Price of 1 pDAI'])
+    pps_df['YT Balance with 1DAI'] = pps_df['Share of Pool in YTC'] / (1-pps_df['Price of 1 pDAI'])
 
-    pps_df['yvDAI Balance'] = 1 - pps_df['Share of Pool in YTC']
+    pps_df['yvDAI Balance with 1DAI'] = 1 - pps_df['Share of Pool in YTC']
 
     pps_df = pps_df.dropna()
 
     pps_df = pps_df.iloc[::maturity_in_days, :]
 
-    pps_df['Payoff'] = pps_df['YT Balance'].shift(1) * pps_df['return'] + pps_df['yvDAI Balance'].shift(1)*(1+pps_df['return'])
+    pps_df['Payoff'] = pps_df['YT Balance with 1DAI'].shift(1) * pps_df['return'] + pps_df['YT Balance with 1DAI'].shift(1)*(1+pps_df['return'])
 
     pps_df['Payoff'][0] = 1.0
 
@@ -97,7 +97,7 @@ def compute_ytc_strategy_return(pps_df, yearn_exposure_multiplier, maturity_in_d
 # multipliers = [5, 50, 100, 150, 200, 300, 400]
 multipliers_dict = {}
 
-for multiplier in range(5, 410, 25):
+for multiplier in range(199, 201, 1):
     multipliers_dict[multiplier] = compute_ytc_strategy_return(pps_df=df, yearn_exposure_multiplier=multiplier, maturity_in_days=7, naive_fixed_rate_discount=0.0175)
 
 multipliers_df = pd.DataFrame.from_dict(data=multipliers_dict, orient='index')
