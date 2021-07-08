@@ -3,6 +3,7 @@ import gzip
 import json
 from yieldenv.constants import CONTRACT_DATA, DATA_PATH
 import pandas as pd
+import matplotlib.pyplot as plt
 
 BLOCK_NUMBER = "blocks"
 VALUE = "pps"
@@ -35,6 +36,7 @@ df = df.iloc[::13, :]
 def compute_ytc_strategy_return(pps_df, yearn_exposure_multiplier, maturity_in_days, naive_fixed_rate_discount=0.02):
 
     APY_CALC_PERIOD_YEARN = 7 # days
+    APY_CALC_PERIOD_POOL = 7  # days
 
     pps_df['return'] = ((pps_df['Price Per Share'].values - pps_df['Price Per Share'].shift(maturity_in_days).values)) \
                        / pps_df['Price Per Share'].values
@@ -56,24 +58,62 @@ def compute_ytc_strategy_return(pps_df, yearn_exposure_multiplier, maturity_in_d
 
     pps_df = pps_df.dropna()
 
-    # payoffs = {}
-
     pps_df = pps_df.iloc[::maturity_in_days, :]
 
     pps_df['Payoff'] = pps_df['YT Balance'].shift(1) * pps_df['return'] + pps_df['yvDAI Balance'].shift(1)*(1+pps_df['return'])
 
-    pps_df['Cumulative Payoff'] = pps_df['Payoff'].cumprod()
+    pps_df['Payoff'][0] = 1.0
 
-    pps_df['Pool APY'] = pps_df['Cumulative Payoff'].pow(365 / (pps_df.index - pps_df.index[0]).days) - 1
+    pps_df['Pool Price Per Share'] = pps_df['Payoff'].cumprod()
 
-    return pps_df
+    pps_df['Pool APY Since Inception'] = pps_df['Pool Price Per Share'].pow(365 / (pps_df.index - pps_df.index[0]).days) - 1
+
+    pps_df['Pool Return'] = ((pps_df['Pool Price Per Share'].values - pps_df['Pool Price Per Share'].shift(int(APY_CALC_PERIOD_YEARN/APY_CALC_PERIOD_POOL)).values)) \
+                       / pps_df['Price Per Share'].values
+
+    pps_df['Pool Excess Return'] = pps_df['Pool Return'] - pps_df['return']
+
+    strategy_apy = pps_df['Pool APY Since Inception'][-1]
+    strategy_return = pps_df['Pool Price Per Share'][-1] - 1
+    yearn_return = (pps_df['Price Per Share'][-1] - pps_df['Price Per Share'][0]) / pps_df['Price Per Share'][0]
+
+    pps_df = pps_df.dropna()
+
+    std_strategy_excess_returns = pps_df['Pool Excess Return'].std()
+    sharpe_ratio = (strategy_return - yearn_return) / (std_strategy_excess_returns)
+
+    average_share_of_ytc = pps_df['Share of Pool in YTC'].mean()
+
+    std_strategy_returns = pps_df['Pool Return'].std()
+
+    # return {"Strategy APY": strategy_apy, "Sharpe Ratio": sharpe_ratio, "Strategy Return": strategy_return,
+    #         "Yearn Return": yearn_return, "Excess Returns Standard Deviation": std_strategy_excess_returns,
+    #         "Average Share of Pool In YTC": average_share_of_ytc}
+
+    return {"Strategy APY": strategy_apy, "Standard Deviation of Returns": std_strategy_returns,
+            "Average Share of Pool In YTC": average_share_of_ytc}
 
 
-compute_ytc_strategy_return(pps_df=df, yearn_exposure_multiplier=10, maturity_in_days=7)
+# multipliers = [5, 50, 100, 150, 200, 300, 400]
+multipliers_dict = {}
+
+for multiplier in range(5, 410, 25):
+    multipliers_dict[multiplier] = compute_ytc_strategy_return(pps_df=df, yearn_exposure_multiplier=multiplier, maturity_in_days=7, naive_fixed_rate_discount=0.0175)
+
+multipliers_df = pd.DataFrame.from_dict(data=multipliers_dict, orient='index')
 
 
+def create_plots(df):
+
+    for i, col in enumerate(df.columns):
+        df[col].plot(fig=plt.figure(i))
+        plt.title(col)
+
+    plt.show()
 
 
+# create_plots(df=multipliers_df)
+print('done')
 
 
 
